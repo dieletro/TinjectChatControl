@@ -1,2 +1,2 @@
-# TinjectChatControl
+# TInjectChatControl
 Component for chat interaction
