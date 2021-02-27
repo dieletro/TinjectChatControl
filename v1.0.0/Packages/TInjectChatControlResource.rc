@@ -1,3 +1,3 @@
-FEnt BITMAP "..\\Source\\N_Entregue.bmp"
-FEnv BITMAP "..\\Source\\N_Enviado.bmp"
-FLido BITMAP "..\\Source\\N_Lido.bmp"
+NEnt RCDATA "..\\Source\\N_Entregue.png"
+NEnv RCDATA "..\\Source\\N_Enviado.png"
+NLido RCDATA "..\\Source\\N_Lido.png"
