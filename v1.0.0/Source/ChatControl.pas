@@ -34,7 +34,9 @@ uses
     Messages, SysUtils, Classes,
     Controls, Graphics, ComCtrls, StdCtrls, LCLType
   {$else} //DELPHI
-    WinApi.Windows, WinApi.Messages, System.SysUtils, System.Classes,
+    WinApi.Windows, WinApi.Messages,
+    Vcl.Dialogs,
+    System.SysUtils, System.Classes,
     Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls,
     System.StrUtils,   //Uso do Rec
     Vcl.Imaging.pngimage,
@@ -46,9 +48,9 @@ type
 
   TChatTypes = (ctPrivate = 0, ctRegularGroup = 1, ctSuperGroup = 2, ctChanel = 3);
 
-  TMediaType = (mtTexto = 0, mtVideo = 1, mtAudio = 2, mtLink = 3, mtImagem = 4, mtDocumento = 5);
+  TMediaType = (mtTexto = 0, mtVideo = 1, mtAudio = 2, mtLink = 3, mtImagem = 4, mtDocumento = 5, mtAnimation = 6);
 
-  TMessageInfo = class(TObject)
+  TChat = class
   private
     FUser: TUser;
     FID: Int64;
@@ -58,11 +60,12 @@ type
     FLastName: String;
     FPhoneNumber: String;
     FMessage: String;
-    FMessages: TObjectList<TMessageInfo>;
     FMediaType: TMediaType;
     FFileToSend: TGraphic;
+    FHora: String;
+    FSent: Boolean;
   public
-    constructor Create; overload;
+    constructor Create;
     destructor Destroy;
     property User: TUser read FUser write FUser;
     property MessageID: Int64 read FID write FID;
@@ -72,16 +75,18 @@ type
     property LastName: String read FLastName write FLastName;
     property PhoneNumber: String read FPhoneNumber write FPhoneNumber;
     property &Message: String read FMessage write FMessage;
+    property Hora: String read FHora write FHora;
+
+    [DEFAULT(False)]
+    property Sent: Boolean read FSent write FSent;
     property MediaType: TMediaType read FMediaType write FMediaType;
     property FileToSend: TGraphic  read FFileToSend write FFileToSend;
-    property Messages: TObjectList<TMessageInfo> read FMessages write FMessages;
   end;
 
   TInjectChatControl = class(TCustomControl)
   private
     FColor1, FColor2: TColor;
     FStrings: TStringList;
-    FStringsAdded: TStringList;
     FTitle: TLabel;  //Add for Test use Title of message(Beta)
     FScrollPos: integer;
     FOldScrollPos: integer;
@@ -90,16 +95,18 @@ type
     FInvalidateCache: boolean;
     FColorTitle: TColor;
     FChatType: TChatTypes;
-    FMessageInfo: TMessageInfo;
+    FChat: TChat;
+    FMessages: TObjectList<TChat>;
     procedure StringsChanged(Sender: TObject);
+    procedure SetStringList(Strings: TStringList);
     procedure SetColor1(Color1: TColor);
     procedure SetColor2(Color2: TColor);
-    procedure SetStringList(Strings: TStringList);
     procedure ScrollPosUpdated;
     procedure InvalidateCache;
     procedure SetColorTitle(const Value: TColor);
     function LoadImage(imgResName: String): TGraphic;
-    function DrawSpeechBox(RefRect: TRect; User: TUser): TRect;
+    function DrawSpeechBox(RefRect: TRect; User: TUser; EnableArrow: Boolean = True): TRect;
+    function LoadPNGImage(imgResName: String): TGraphic;
 
   protected
     procedure Paint; override;
@@ -109,18 +116,20 @@ type
     function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
       MousePos: TPoint): Boolean; override;
     procedure Click; override;
+
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    function SayFile(const MessageInfo: TMessageInfo; ChatType: TChatTypes;
-      const Title, S: String; FileStrem: TStream): Integer;
-    function Say(const MessageInfo: TMessageInfo{User: TUser}; ChatType: TChatTypes; const Title, S: String): Integer;
-    function SayUser(const User: TUser; ChatType: TChatTypes; const Title, S: String): Integer;
+    function SayFile(const AChat: TChat; AChatType: TChatTypes): Integer;
+    function Say(const AChat: TChat; AChatType: TChatTypes): Integer;
+    function SayUser(const User: TUser; ChatType: TChatTypes): Integer;
     procedure ScrollToBottom;
     {$ifdef fpc}
     property Canvas;
     {$endif}
+
   published
+    property Messages: TObjectList<TChat> read FMessages write FMessages;
     property Align;
     property Anchors;
     {$ifndef fpc}
@@ -210,25 +219,24 @@ begin
     SetFocus;
 end;
 
-function TInjectChatControl.DrawSpeechBox(RefRect: TRect; User: TUser) : TRect;
+function TInjectChatControl.DrawSpeechBox(RefRect: TRect; User: TUser; EnableArrow: Boolean) : TRect;
 var
   X, Y, W, H, S: Integer;
   Arrow: Array [0..10] Of TPoint; //era 2
-  ArrowHeight, ArrowWidth: Integer;
+  ArrowHeight, ArrowWidth, AtualPosY, AtualPosX: Integer;
   APaddingTop, APaddingBottom, APaddingLeft, APaddingRight : Integer;
-
   AMarginY, AMarginX: Integer;
 begin
-  AMarginY := 7;
-  AMarginX := AMarginY + 4;
-
-  APaddingTop := 4;
-  APaddingBottom := 4;
-  APaddingLeft := 4;
-  APaddingRight := 4;
+  AMarginY := 11;
+  AMarginX := AMarginY {+ 4};
 
   ArrowHeight := 20;
   ArrowWidth  := 20;
+
+  APaddingTop     := 4;
+  APaddingBottom  := 4;
+  APaddingLeft    := 4;
+  APaddingRight   := 4;
 
   with Canvas do
   begin
@@ -253,46 +261,41 @@ begin
     If User = User1 then
     Begin                     //Result.Location.X
       //Define a Ponta de seta para a esquerda ---OK---                       //AMarginY = 7
-      Arrow[0] := Point(6,  Result.Location.Y  + Result.Height - ArrowHeight - AMarginY + 34);
-      Arrow[1] := Point(8,  Result.Location.Y  + Result.Height - ArrowHeight - AMarginY + 33);
-      Arrow[2] := Point(10, Result.Location.Y  + Result.Height - ArrowHeight - AMarginY + 32);
-      Arrow[3] := Point(13, Result.Location.Y  + Result.Height - ArrowHeight - AMarginY + 31);
-      Arrow[4] := Point(16, Result.Location.Y  + Result.Height - ArrowHeight - AMarginY + 30);
-      Arrow[5] := Point(19, Result.Location.Y  + Result.Height - ArrowHeight - AMarginY + 29);
-      Arrow[6] := Point(22, Result.Location.Y  + Result.Height - ArrowHeight - AMarginY + 28);
-      Arrow[7] := Point(24, Result.Location.Y  + Result.Height - ArrowHeight - AMarginY + 27);
-      Arrow[8] := Point(26, Result.Location.Y  + Result.Height - ArrowHeight - AMarginY + 26);
-      Arrow[9] := Point(26, Result.Location.Y  + Result.Height - ArrowHeight - AMarginY + 34);
-      Arrow[10] := Point(6, Result.Location.Y  + Result.Height - ArrowHeight - AMarginY + 34);
-    End Else
+      AtualPosY := RefRect.Location.Y  + RefRect.Height - ArrowHeight - AMarginY;
+
+      Arrow[0]   := Point(6,  AtualPosY + 34);
+      Arrow[1]   := Point(8,  AtualPosY + 33);
+      Arrow[2]   := Point(10, AtualPosY + 32);
+      Arrow[3]   := Point(13, AtualPosY + 31);
+      Arrow[4]   := Point(16, AtualPosY + 30);
+      Arrow[5]   := Point(19, AtualPosY + 29);
+      Arrow[6]   := Point(22, AtualPosY + 28);
+      Arrow[7]   := Point(24, AtualPosY + 27);
+      Arrow[8]   := Point(26, AtualPosY + 26);
+      Arrow[9]   := Point(26, AtualPosY + 34);
+      Arrow[10]  := Point(6,  AtualPosY + 34);
+    End
+      Else
     Begin
-      //Define a Ponta de seta para a direita  ---OK---             //AMarginX = 7 + 4
-      Arrow[0]  := Point(Result.Location.X + ArrowHeight + AMarginX + 48,
-        RefRect.Location.Y + RefRect.Height - ArrowWidth - AMarginX + 34);
-      Arrow[1]  := Point(Result.Location.X + ArrowHeight + AMarginX + 43,
-        RefRect.Location.Y + RefRect.Height - ArrowWidth - AMarginX + 33);
-      Arrow[2]  := Point(Result.Location.X + ArrowHeight + AMarginX + 39,
-        RefRect.Location.Y + RefRect.Height - ArrowWidth - AMarginX + 32);
-      Arrow[3]  := Point(Result.Location.X + ArrowHeight + AMarginX + 36,
-        RefRect.Location.Y + RefRect.Height - ArrowWidth - AMarginX + 31);
-      Arrow[4]  := Point(Result.Location.X + ArrowHeight + AMarginX + 33,
-        RefRect.Location.Y + RefRect.Height - ArrowWidth - AMarginX + 30);
-      Arrow[5]  := Point(Result.Location.X + ArrowHeight + AMarginX + 30,
-        RefRect.Location.Y + RefRect.Height - ArrowWidth - AMarginX + 29);
-      Arrow[6]  := Point(Result.Location.X + ArrowHeight + AMarginX + 28,
-        RefRect.Location.Y + RefRect.Height - ArrowWidth - AMarginX + 28);
-      Arrow[7]  := Point(Result.Location.X + ArrowHeight + AMarginX + 27,
-        RefRect.Location.Y + RefRect.Height - ArrowWidth - AMarginX + 27);
-      Arrow[8]  := Point(Result.Location.X + ArrowHeight + AMarginX + 26,
-        RefRect.Location.Y + RefRect.Height - ArrowWidth - AMarginX + 26);
-      Arrow[9]  := Point(Result.Location.X + ArrowHeight + AMarginX + 26,
-        RefRect.Location.Y + RefRect.Height - ArrowWidth - AMarginX + 34);
-      Arrow[10] := Point(Result.Location.X + ArrowHeight + AMarginX + 48,
-        RefRect.Location.Y + RefRect.Height - ArrowWidth - AMarginX + 34);
+      //Define a Ponta de seta para a direita  ---OK---
+      AtualPosX := RefRect.Location.X + ArrowHeight + AMarginX - 8;
+      AtualPosY := RefRect.Location.Y + RefRect.Height - ArrowWidth - AMarginX;
+
+      Arrow[0]  := Point(AtualPosX + 48, AtualPosY + 34);
+      Arrow[1]  := Point(AtualPosX + 43, AtualPosY + 33);
+      Arrow[2]  := Point(AtualPosX + 39, AtualPosY + 32);
+      Arrow[3]  := Point(AtualPosX + 36, AtualPosY + 31);
+      Arrow[4]  := Point(AtualPosX + 33, AtualPosY + 30);
+      Arrow[5]  := Point(AtualPosX + 30, AtualPosY + 29);
+      Arrow[6]  := Point(AtualPosX + 28, AtualPosY + 28);
+      Arrow[7]  := Point(AtualPosX + 27, AtualPosY + 27);
+      Arrow[8]  := Point(AtualPosX + 26, AtualPosY + 26);
+      Arrow[9]  := Point(AtualPosX + 26, AtualPosY + 34);
+      Arrow[10] := Point(AtualPosX + 48, AtualPosY + 34);
     End;
 
-    //Desenha a Seta
-    Polygon(Arrow);
+    if EnableArrow then
+      Polygon(Arrow); //Desenha a Seta
 
     //Desenha o Retangulo
     RoundRect(
@@ -300,7 +303,7 @@ begin
        RefRect.Top - APaddingTop,
        (RefRect.Right + APaddingRight),
        (RefRect.Bottom + APaddingBottom),
-       S div 4, S div 4);
+       S div 8, S div 8);
 
     //Define o Tamanho da Area
     result := Rect(
@@ -318,28 +321,29 @@ begin
 
   {$ifdef fpc}
     ControlStyle := [csOpaque];
-    Width := 400;
-    Height:= 200;
     Canvas.Brush.Color := Color;
+    Width   := 400;
+    Height  := 200;
   {$endif}
 
   DoubleBuffered := true;
 
-  FScrollPos := 0;
-  FBoxTops := nil;
+  FScrollPos  := 0;
+  FBoxTops    := nil;
   InvalidateCache;
 
+  FMessages := TObjectList<TChat>.Create;
+
   FStrings := TStringList.Create;
-
-  FStringsAdded := TStringList.Create;  //Para teste
-
-  FTitle := TLabel.Create(Nil);
   FStrings.OnChange := StringsChanged;
+
+  FTitle  := TLabel.Create(Nil);
+
   FColor1 := clWhite;
   FColor2 := $00FDF6E0;
-  Color := $00E3C578;
+  Color   := $00E3C578;
 
-  Font.Size := 10;
+  Font.Size := 12;
 
   FOldScrollPos := MaxInt;
 end;
@@ -351,8 +355,12 @@ begin
 end;
 
 destructor TInjectChatControl.Destroy;
+var
+  I: Integer;
 begin
   FStrings.Free;
+   for I := 0 to FMessages.Count - 1 do
+      FMessages[I].Free;
   inherited;
 end;
 
@@ -367,6 +375,18 @@ procedure TInjectChatControl.InvalidateCache;
 begin
   FInvalidateCache := true;
 end;
+
+function TInjectChatControl.LoadPNGImage(imgResName:String): TGraphic;
+var
+  PNG: TPngImage;
+begin
+  Png := TPngImage.Create;
+  try
+    Png.LoadFromResourceName(HInstance, imgResName);
+  finally
+    Result := Png;
+  end;
+End;
 
 function TInjectChatControl.LoadImage(imgResName:String): TGraphic;
 var
@@ -390,142 +410,313 @@ var
   r, r2: TRect;
   SI: {$ifdef fpc}SCROLLINFO{$else}TScrollInfo{$endif};
   sHora, TextBreak, LineBreak: String;
-  MyMessageInfo: TMessageInfo;
-  AMargin: integer;
+  MyAChat: TChat;
+  AMargin: Integer;
 begin
 
   inherited;
-
+  //Definição das Cores dos Usuarios
   Colors[User1] := FColor1;
   Colors[User2] := FColor2;
 
-  AMargin := 18; //Aplicado para left e right
+  //Aplicado para left e right
+  AMargin := 18;
 
+  //Definição da Altura
   y := 10 - FScrollPos;
+
+  //Definição da largura maxima da caixa de mensagem
   MaxWidth := ClientWidth div 2;
 
-  Canvas.Font.Assign(Font);
+ // Canvas.Font.Assign(Font);
 
   if FInvalidateCache then
-    SetLength(FBoxTops, FStrings.Count); //Seta o tamanho do ScollBox
+    //Seta o tamanho do ScollBox
+    SetLength(FBoxTops, FMessages.Count);
 
-    //Novo Metodo para controlar as mensagens
-//  for MyMessageInfo in FMessageInfo.Messages do
-//  Begin
-//
-//
-//  End;
+  //Novo Metodo para controlar as mensagens
+  for I := 0 To FMessages.Count -1 do
+  Begin
 
+    if FInvalidateCache then
+      FBoxTops[i] := y + FScrollPos
+    else
+    begin
+      if (i < (FMessages.Count - 1)) and (FBoxTops[i + 1] - FScrollPos < 0) then
+        Continue;
+      if FBoxTops[i] - FScrollPos > ClientHeight then
+        Break;
+      y := FBoxTops[i] - FScrollPos;
+    end;
 
-  for i := 0 to FStrings.Count - 1 do
-  begin
-    //Se ja não estiver impresso não faça nada
-//    if Not FStrings.Text.Contains(TMessageInfo(FStrings.Objects[i]).MessageID.ToString) then
-//    Begin
+    //Padrões iniciais
+    Canvas.Brush.Color := Colors[User];
+    Canvas.Pen.Width := 0;
+    Canvas.Pen.Color := Colors[User];
 
-      if FInvalidateCache then
-        FBoxTops[i] := y + FScrollPos
-      else
-      begin
-        if (i < (FStrings.Count - 1)) and (FBoxTops[i + 1] - FScrollPos < 0) then
-          Continue;
-        if FBoxTops[i] - FScrollPos > ClientHeight then
-          Break;
-        y := FBoxTops[i] - FScrollPos;
-      end;
+    //Define a Posição da Caixa de Texto
+    r := Rect(AMargin, y, MaxWidth, 16);
 
-               //TUser(FStrings.Objects[i]);
-      User :=  TUser(FStrings.Objects[i]); //TMessageInfo(FStrings.Objects[i]).User;
+    if FChatType = ctPrivate then
+    Begin
+      FTiTle.Caption := '';
+      LineBreak := '';
+    End Else
+      LineBreak := #10;
 
-      //Padrões iniciais
-      Canvas.Brush.Color := Colors[User];
-      Canvas.Pen.Width := 0;
-      Canvas.Pen.Color := Colors[User];
-                //10..20
-      //Define a Posição da Caixa de Texto
-      r := Rect(AMargin, y, MaxWidth, 16);
+    //Captura o Usuario para definir a posição da Caixa de Texto
+    User :=  FMessages[i].User;
 
-      //Quebra de linha automatica com 40 caracteres
-      TextBreak := WrapText(FStrings[i], 40);
+    //Quebra de linha automatica com 40 caracteres
+    TextBreak := WrapText(FMessages[i].Message, 40);
 
-      //Recebendo a hora atual
-      sHora := FormatDateTime('HH:MM',Time);
+    //Recebendo a hora atual
+    sHora := FMessages[I].Hora;
 
-      if FChatType = ctPrivate then
-      Begin
-        FTiTle.Caption := '';
-        LineBreak := '';
-      End Else
-        LineBreak := #13;
+    if Assigned(FMessages[I]) then
+      case FMessages[I].MediaType of
+        mtTexto:  //OK
+          Begin
+          {$REGION 'mtTexto'}
+            //Define o tamanho da caixa de mensagem
+            DrawText(Canvas.Handle,
+              PChar(FMessages[I].UserName
+                +LineBreak
+                +TextBreak
+                +LineBreak
+                +LineBreak
+                +sHora+'        '),
+              Length(FMessages[I].UserName
+                +LineBreak
+                +TextBreak
+                +LineBreak
+                +LineBreak
+                +sHora+'        ')+(LoadPNGImage('NLido').Width div 2),
+              r,
+              DT_WORDBREAK or DT_CALCRECT OR DT_LEFT);
 
-      //Define o tamanho da caixa
-      DrawText(Canvas.Handle,
-        PChar(FTiTle.Caption+LineBreak+TextBreak+#13+sHora+ LoadImage('FLido').ToString),
-        Length(FTiTle.Caption+LineBreak+TextBreak+#13+sHora+ LoadImage('FLido').ToString),
-        r,
-        DT_WORDBREAK or DT_CALCRECT OR DT_LEFT);
+            //Seta a direção do texto de acordo com o usuario
+            if User = User2 then
+            begin
+              RectWidth := r.Right - r.Left;
+              r.Right := ClientWidth - AMargin;
+              r.Left := r.Right - RectWidth;
+            end;
 
-      //Seta a direção do texto de acordo com o usuario
-      if User = User2 then
-      begin
-        RectWidth := r.Right - r.Left;
-        r.Right := ClientWidth - AMargin;
-        r.Left := r.Right - RectWidth;
-      end;
+            //Define e desenha a Caixa de Mensagem
+            r2 := DrawSpeechBox(r, User);
 
-      //Define e desenha a Caixa de Mensagem
-      r2 := DrawSpeechBox(r, User);
+            //Configura o Canvas para o Titulo
+            Canvas.Font.Size := 10;
+            Canvas.Font.Color := FColorTitle;
+            Canvas.Font.Style := Canvas.Font.Style + [fsBold];
 
-      //Configura o Canvas para o Titulo
-      Canvas.Font.Color := FColorTitle;
-      Canvas.Font.Style := Canvas.Font.Style + [fsBold];
+            //Escreve titulo na tela
+            DrawText(Canvas.Handle,
+              PChar(FMessages[I].UserName),
+              Length(FMessages[I].UserName),
+              r,
+               DT_SINGLELINE OR DT_LEFT);
 
-      //Escreve titulo na tela
-      DrawText(Canvas.Handle,
-        PChar(FTiTle.Caption),
-        Length(FTiTle.Caption),
-        r,
-        DT_WORDBREAK OR DT_LEFT);
+            //Configura o Canvas para o Texto
+            Canvas.Font.Size := 10;
+            Canvas.Font.Color := clBlack;
+            Canvas.Font.Style := [];
 
-      //Configura o Canvas para o Texto
-      Canvas.Font.Color := clBlack;
-      Canvas.Font.Style := [];
+            //Escreve o Texto na tela
+            DrawText(Canvas.Handle,
+              PChar(LineBreak+TextBreak+LineBreak),
+              Length(LineBreak+TextBreak+LineBreak),
+              r,
+              {DT_WORDBREAK OR}
+              DT_NOFULLWIDTHCHARBREAK OR
+              DT_TABSTOP OR
+              DT_HIDEPREFIX OR DT_EDITCONTROL OR DT_LEFT);
 
-      //Escreve o Texto na tela
-      DrawText(Canvas.Handle,
-        PChar(#13+TextBreak),
-        Length(#13+TextBreak),
-        r,
-        DT_WORDBREAK OR DT_LEFT);
+            //Configura o Canvas para a Hora
+            Canvas.Font.Size := 7;
+            Canvas.Font.Color := clGray;
+            Canvas.Font.Style := [];
 
-      //Configura o Canvas para a Hora
-      Canvas.Font.Size := 7;
-      Canvas.Font.Color := clGray;
-      Canvas.Font.Style := [];
+            //Escreve a hora na tela
+            DrawText(Canvas.Handle,
+              PChar(sHora+'        '),
+              Length(sHora+'        '),
+              r,
+              DT_RIGHT OR DT_BOTTOM OR DT_SINGLELINE);
 
-      //Escreve a hora na tela
-      DrawText(Canvas.Handle,
-        PChar(#13+sHora),
-        Length(#13+sHora+LoadImage('FLido').ToString),
-        r,
-        DT_RIGHT OR DT_BOTTOM OR DT_SINGLELINE);
+            //Carregar Tick de confirmação de entrega e leitura
+            Canvas.Draw(
+              r2.Location.X+r2.Width - 27,
+              r2.Location.Y+r2.Height - 20,
+              LoadPNGImage('NLido'));
 
-      { TODO 5 -oDiego -cImagem : Substituir aimagem por uma PNG sem fundo }
-     //Carregar Tick de confirmação de entrega e leitura
-      Canvas.Draw(r2.Location.X+r2.Width - 24, r2.Location.Y+r2.Height - 18, LoadImage('FLido'));
+          {$ENDREGION 'mtTexto'}
+          End;
 
-      case FMessageInfo.MediaType of
-        mtTexto: ;
-        mtVideo: ;
-        mtAudio: ;
-        mtLink: ;
+        mtVideo:
+          Begin
+          {$REGION 'mtVideo'}
+
+          {$ENDREGION 'mtVideo'}
+          End;
+
+        mtAudio:
+          Begin
+          {$REGION 'mtAudio'}
+
+          {$ENDREGION 'mtAudio'}
+          End;
+
+        mtLink:
+          Begin
+          {$REGION 'mtLink'}
+            //Define o tamanho da caixa de mensagem
+            DrawText(Canvas.Handle,
+              PChar(FMessages[I].UserName
+                +LineBreak
+                +TextBreak
+                +LineBreak
+                +LineBreak
+                +sHora+'        '),
+              Length(FMessages[I].UserName
+                +LineBreak
+                +TextBreak
+                +LineBreak
+                +LineBreak
+                +sHora+'        ')+(LoadPNGImage('NLido').Width div 2),
+              r,
+              DT_WORDBREAK or DT_CALCRECT OR DT_LEFT);
+
+            //Seta a direção do texto de acordo com o usuario
+            if User = User2 then
+            begin
+              RectWidth := r.Right - r.Left;
+              r.Right := ClientWidth - AMargin;
+              r.Left := r.Right - RectWidth;
+            end;
+
+            //Define e desenha a Caixa de Mensagem
+            r2 := DrawSpeechBox(r, User);
+
+            //Configura o Canvas para o Titulo
+            Canvas.Font.Size := 10;
+            Canvas.Font.Color := FColorTitle;
+            Canvas.Font.Style := Canvas.Font.Style + [fsBold];
+
+            //Escreve titulo na tela
+            DrawText(Canvas.Handle,
+              PChar(FMessages[I].UserName),
+              Length(FMessages[I].UserName),
+              r,
+               DT_SINGLELINE OR DT_LEFT);
+
+            //Configura o Canvas para o Texto
+            Canvas.Font.Size := 10;
+            Canvas.Font.Color := $00D0A61A;
+            Canvas.Font.Style := Canvas.Font.Style + [fsUnderline];
+
+            //Escreve o Texto na tela
+            DrawText(Canvas.Handle,
+              PChar(LineBreak
+                +TextBreak
+                +LineBreak
+                +LineBreak
+                +LineBreak),
+              Length(LineBreak
+                +TextBreak
+                +LineBreak
+                +LineBreak
+                +LineBreak),
+              r,
+              {DT_WORDBREAK OR}
+              DT_NOFULLWIDTHCHARBREAK OR
+              DT_TABSTOP OR
+              DT_HIDEPREFIX OR DT_EDITCONTROL OR DT_LEFT);
+
+            //Configura o Canvas para a Hora
+            Canvas.Font.Size := 7;
+            Canvas.Font.Color := clGray;
+            Canvas.Font.Style := [];
+
+            //Escreve a hora na tela
+            DrawText(Canvas.Handle,
+              PChar(sHora+'        '),
+              Length(sHora+'        '),
+              r,
+              DT_RIGHT OR DT_BOTTOM OR DT_SINGLELINE);
+
+            //Carregar Tick de confirmação de entrega e leitura
+            Canvas.Draw(
+              r2.Location.X+r2.Width - 27,
+              r2.Location.Y+r2.Height - 20,
+              LoadPNGImage('NLido'));
+          {$ENDREGION 'mtLink'}
+          End;
+
         mtImagem:
-        Begin
-       // if Assigned(FMessageInfo.FileToSend) then
-         // Canvas.Draw(r2.Location.X+r2.Width - 24, r2.Location.Y+r2.Height - 18, FMessageInfo.FileToSend);
-        End;
-        mtDocumento: ;
+          Begin
+          {$REGION 'mtImagem'}
+
+            if Assigned(FMessages[I].FileToSend) then
+              //Define o tamanho da caixa
+              DrawText(Canvas.Handle,
+                PChar(FMessages[I].Message
+                +sHora+'        '),
+                Length(sHora+'        ')+500
+                {FMessages[I].FileToSend.Height},
+                r,
+                DT_WORDBREAK or DT_CALCRECT OR DT_LEFT);
+
+            //Seta a direção do texto de acordo com o usuario
+            if User = User2 then
+            begin
+              RectWidth := r.Right - r.Left;
+              r.Right := ClientWidth - AMargin;
+              r.Left := r.Right - RectWidth;
+            end;
+
+            //Define e desenha a Caixa de Mensagem
+            //r2 := DrawSpeechBox(r, User, False);
+
+            //Configura o Canvas para a Hora
+            Canvas.Font.Size := 7;
+            Canvas.Font.Color := clGray;
+            Canvas.Font.Style := [];
+
+            //Escreve a hora na tela
+            DrawText(Canvas.Handle,
+              PChar(sHora+'        '),
+              Length(sHora+'        '),
+              r,
+              DT_RIGHT OR DT_BOTTOM OR DT_SINGLELINE);
+
+            Canvas.StretchDraw(r, FMessages[I].FileToSend);
+
+            //Carregar Tick de confirmação de entrega e leitura
+            Canvas.Draw(
+              r2.Location.X+r2.Width - 27,
+              r2.Location.Y+r2.Height - 20,
+              LoadPNGImage('NLido'));
+
+          {$ENDREGION 'mtImagem'}
+          End;
+
+        mtDocumento:
+          Begin
+          {$REGION 'mtDocumento'}
+
+          {$ENDREGION 'mtDocumento'}
+          End;
+
+        mtAnimation:
+          Begin
+          {$REGION 'mtAnimation'}
+            //DrawAnimatedRects(Canvas.Handle, IDANI_CAPTION,r, r2);
+          {$ENDREGION 'mtAnimation'}
+          End;
       end;
+
 
       if FInvalidateCache then
       begin
@@ -534,6 +725,7 @@ begin
       end;
     //End;
 
+    FMessages[I].Sent := True;
   end;
 
   SI.cbSize := sizeof(SI);
@@ -560,30 +752,30 @@ begin
   Invalidate;
 end;
 
-function TInjectChatControl.SayFile(const MessageInfo: TMessageInfo; ChatType: TChatTypes; const Title, S: String; FileStrem: TStream): Integer;
+function TInjectChatControl.SayFile(const AChat: TChat; AChatType: TChatTypes): Integer;
 begin
 //  FileStrem := ;
-  result := Say(MessageInfo, ChatType, Title, S);
+  Result := Say(AChat, AChatType);
 end;
 
-function TInjectChatControl.Say(const MessageInfo: TMessageInfo{User: TUser}; ChatType: TChatTypes; const Title, S: String): Integer;
+function TInjectChatControl.Say(const AChat: TChat; AChatType: TChatTypes): Integer;
 begin
-  FTitle.Caption := Title;
-  FMessageInfo := MessageInfo;
-  FChatType := ChatType;
+  FChat := AChat;
+  FChatType := AChatType;
   ControlStyle := [csOpaque];
-  //Emdesenvolvimento para controle das mensagens
-  FMessageInfo.Messages.Add(MessageInfo);
-  result := FStrings.AddObject(S, TObject(FMessageInfo));
+  //Em desenvolvimento para controle das mensagens
+  Result := FMessages.Add(FChat);
+ // Result := FStrings.AddObject(FChat.Message, TObject(FChat));
+  InvalidateCache;
+  Invalidate;
 end;
 
-function TInjectChatControl.SayUser(const User: TUser; ChatType: TChatTypes; const Title, S: String): Integer;
+function TInjectChatControl.SayUser(const User: TUser; ChatType: TChatTypes): Integer;
 begin
-  FTitle.Caption := Title;
+//  FTitle.Caption := Title;
   FChatType := ChatType;
-  FTitle.Caption := Title;
   ControlStyle := [csOpaque];
-  result := FStrings.AddObject(S, TObject(User));
+//  result := FStrings.AddObject(S, TObject(User));
 end;
 
 procedure TInjectChatControl.ScrollToBottom;
@@ -708,26 +900,18 @@ begin
   FOldScrollPos := FScrollPos;
 end;
 
-{ TMessageInfo }
+{ TChat }
 
-constructor TMessageInfo.Create;
+constructor TChat.Create;
 begin
-  inherited Create;
   FMediaType := mtTexto;
-  FMessages := TObjectList<TMessageInfo>.Create;
 end;
 
-destructor TMessageInfo.Destroy;
-var
-  I: Integer;
+destructor TChat.Destroy;
 begin
-  for I:= 0 to FMessages.Count -1 do
-  Begin
-    FMessages[I].Free;
-  End;
-
-  FFileToSend.Free;
-  inherited;
+{ TODO 2 -oDiego Lacerda -cMemoryLeak : //Erro Reportado Aqui ao Destruir... }
+  if Assigned(FFileToSend) then
+    FFileToSend.Free;
 end;
 
 end.
