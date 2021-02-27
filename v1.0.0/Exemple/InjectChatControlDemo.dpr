@@ -1,11 +1,5 @@
 program InjectChatControlDemo;
 
-
-
-
-
-
-
 {$R *.dres}
 
 uses

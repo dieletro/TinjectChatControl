@@ -5,7 +5,7 @@ interface
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
   Dialogs, Math, StdCtrls, ExtCtrls, ChatControl, Vcl.ComCtrls, RichEdit,
-  Vcl.Imaging.pngimage, SpeechBubble, Balloon;
+  Vcl.Imaging.pngimage, SpeechBubble, Balloon, System.Generics.Collections;
 
 type
   TForm4 = class(TForm)
@@ -18,12 +18,18 @@ type
     Edit2: TEdit;
     ChatControl1: TInjectChatControl;
     Button2: TButton;
-    Button3: TButton;
     OpenDlg: TOpenDialog;
+    Image1: TImage;
+    Button4: TButton;
+    Button5: TButton;
+    Image2: TImage;
+    btnTest: TButton;
     procedure Button1Click(Sender: TObject);
     procedure Edit2KeyPress(Sender: TObject; var Key: Char);
     procedure Button2Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
+    procedure Button5Click(Sender: TObject);
+    procedure btnTestClick(Sender: TObject);
   private
     procedure RichEditToCanvas(RichEdit: TRichEdit; Canvas: TCanvas;
       PixelsPerInch: Integer);
@@ -35,6 +41,7 @@ type
 
 var
   Form4: TForm4;
+  MyChat: TChat;
 
 implementation
 
@@ -71,28 +78,44 @@ begin
 //   Image1.Refresh;
 end;
 
+procedure TForm4.btnTestClick(Sender: TObject);
+var
+  MyStream: TMemoryStream;
+begin
+  try
+    MyStream := TMemoryStream.Create;
+   // MyChat.FileToSend.SaveToStream(MyStream);
+    MyStream.Position := 0;
+    Image1.Picture.SaveToStream(MyStream);
+  finally
+    Image2.Picture.Bitmap.CanLoadFromStream(MyStream);
+
+  end;
+end;
+
 procedure TForm4.Button1Click(Sender: TObject);
 var
   i: integer;
 var
-  MessageInfo: TMessageInfo;
+  MyChat: TChat;
 begin
-  MessageInfo := TMessageInfo.Create;
-  MessageInfo.User := TUser(TEdit(Sender).Tag);
-  MessageInfo.MessageID := Random(128);
-  MessageInfo.ChatID := 1234;
-  MessageInfo.UserName := 'diegolacerdamenezes';
-  MessageInfo.FirstName := 'Ruan Diego';
-  MessageInfo.LastName := 'Lacerda Menezes';
-  MessageInfo.PhoneNumber := '+5521997196000';
-  MessageInfo.Message := TEdit(Sender).Text;
+  MyChat := TChat.Create;
+  MyChat.User := TUser(TEdit(Sender).Tag);
+  MyChat.Hora := FormatDateTime('HH:MM',Time);
+  MyChat.MessageID := Random(128);
+  MyChat.ChatID := 1234;
+  MyChat.UserName := 'diegolacerdamenezes';
+  MyChat.FirstName := 'Ruan Diego';
+  MyChat.LastName := 'Lacerda Menezes';
+  MyChat.PhoneNumber := '+5521997196000';
+  MyChat.Message := TEdit(Sender).Text;
 
 
   ChatControl1.Strings.Clear;
   for i := 0 to StrToInt(LabeledEdit1.Text) - 1 do
                      //TUser(Random(2))
-    ChatControl1.Say(MessageInfo, ctSuperGroup, 'MEU NOME', 'testando...');
-    MessageInfo.Free;
+    ChatControl1.Say(MyChat, ctSuperGroup);
+    MyChat.Free;
 end;
 
 procedure TForm4.Button2Click(Sender: TObject);
@@ -101,102 +124,140 @@ begin
 end;
 
 procedure TForm4.Button3Click(Sender: TObject);
-//var
-//  LInput : TMemoryStream;
-//var
-//  MessageInfo: TMessageInfo;
 begin
-//  MessageInfo := TMessageInfo.Create;
-//  MessageInfo.User := TUser(TEdit(Sender).Tag);
-//  MessageInfo.MessageID := Random(128);
-//  MessageInfo.ChatID := 1234;
-//  MessageInfo.UserName := 'diegolacerdamenezes';
-//  MessageInfo.FirstName := 'Ruan Diego';
-//  MessageInfo.LastName := 'Lacerda Menezes';
-//  MessageInfo.PhoneNumber := '+5521997196000';
-//  MessageInfo.Message := TEdit(Sender).Text;
-//  MessageInfo.MediaType := mtImagem;
 
-//  if OpenDlg.Execute then
-//  begin
-//    try
-//      LInput := TMemoryStream.Create;
-//      Image1.Picture.LoadFromFile(OpenDlg.FileName);
-//
-//    //  MessageInfo.FileToSend.LoadFromFile(OpenDlg.FileName);
-//
-//      {$IFDEF VER340}
-//        Image1.Picture.SaveToStream(LInput);
-//      {$ELSE}
-//        Image1.Picture.Bitmap.SaveToStream(LInput);
-//      {$ENDIF}
-//
-//      {$IFDEF VER330}
-//        Image1.Picture.SaveToStream(LInput);
-//      {$ELSE}
-//        Image1.Picture.Bitmap.SaveToStream(LInput);
-//      {$ENDIF}
-//
-//      {$IFDEF VER320}
-//        Image1.Picture.SaveToStream(LInput);
-//      {$ELSE}
-//        Image1.Picture.Bitmap.SaveToStream(LInput);
-//      {$ENDIF}
-//
-//      {$IFDEF VER310}
-//        Image1.Picture.Bitmap.SaveToStream(LInput);
-//      {$ELSE}
-//        Image1.Picture.Bitmap.SaveToStream(LInput);
-//      {$ENDIF}
-//
-//      {$IFDEF VER300}
-//        Image1.Picture.Bitmap.SaveToStream(LInput);
-//      {$ELSE}
-//        Image1.Picture.Bitmap.SaveToStream(LInput);
-//      {$ENDIF}
-//
-//
-//     // BotDAO.RegistrarCardapio(LInput);
-//
-//      LInput.Free;
-//    //  showMessage('Cardápio cadastrado com sucesso!');
-//
-//      except on e:exception do
-//      begin
-//        showMessage('**** Falha ***** Tente outra imagem.');
-//      end;
-//    end;
-//  end;
-//
-//
-//    ChatControl1.Say(MessageInfo, ctSuperGroup, 'USER'+TEdit(Sender).Tag.ToString+' : ',TEdit(Sender).Text);
-//    MessageInfo.Free;
+  if OpenDlg.Execute then
+  begin
+    try
+      Image1.Picture.LoadFromFile(OpenDlg.FileName);
+
+      try
+        MyChat := Nil;
+        MyChat := TChat.Create; //instancia uma nova mensagem
+        MyChat.MediaType := mtLink;
+        MyChat.Hora := FormatDateTime('HH:MM',Time);
+        MyChat.User := User1;
+        MyChat.MessageID := Random(128);
+        MyChat.ChatID := 1234;
+        MyChat.Message := Edit1.Text;
+        MyChat.UserName := 'diegolacerdamenezes';
+        MyChat.FirstName := 'Ruan Diego';
+        MyChat.LastName := 'Lacerda Menezes';
+        MyChat.PhoneNumber := '+5521997196000';
+        MyChat.FileToSend := Image1.Picture.Graphic;
+
+      finally
+        //Exemplo de uso de enviopassando o object MenssageInfo com os dados da Mensagens
+        ChatControl1.SayFile(MyChat, ctSuperGroup);
+      end;
+
+    except on e:exception do
+      begin
+        showMessage('**** Falha ***** Tente outra imagem.'+#10#13+e.Message);
+      end;
+
+    end;
+  end;
+
+end;
+
+procedure TForm4.Button5Click(Sender: TObject);
+begin
+
+  if OpenDlg.Execute then
+  begin
+
+    try
+      Image1.Picture.LoadFromFile(OpenDlg.FileName);
+      try
+        MyChat := Nil;
+        MyChat := TChat.Create; //instancia uma nova mensagem
+        MyChat.MediaType := mtImagem;
+        MyChat.Hora := FormatDateTime('HH:MM',Time);
+        MyChat.User := User2;
+        MyChat.MessageID := Random(128);
+        MyChat.ChatID := 1234;
+        MyChat.Message := Edit2.Text;
+        MyChat.UserName := 'Bot';
+        MyChat.FirstName := 'ChatBot';
+        MyChat.LastName := 'LMCodee';
+        MyChat.PhoneNumber := '+5521123456780';
+        MyChat.FileToSend := Image1.Picture.Graphic;
+
+      finally
+        //Exemplo de uso de enviopassando o object MenssageInfo com os dados da Mensagens
+        ChatControl1.SayFile(MyChat, ctSuperGroup);
+      end;
+
+    except on e:exception do
+      begin
+        showMessage('**** Falha ***** Tente outra imagem.'+#10#13+e.Message);
+      end;
+
+    end;
+  end;
 
 end;
 
 procedure TForm4.Edit2KeyPress(Sender: TObject; var Key: Char);
 var
-  MessageInfo: TMessageInfo;
+  Txt : String;
 begin
-  MessageInfo := TMessageInfo.Create;
-  MessageInfo.User := TUser(TEdit(Sender).Tag);
-  MessageInfo.MessageID := Random(128);
-  MessageInfo.ChatID := 1234;
-  MessageInfo.UserName := 'diegolacerdamenezes';
-  MessageInfo.FirstName := 'Ruan Diego';
-  MessageInfo.LastName := 'Lacerda Menezes';
-  MessageInfo.PhoneNumber := '+5521997196000';
-  MessageInfo.Message := TEdit(Sender).Text;
+  if TEdit(Sender).Text <> '' then
+  Begin
+    Assert(Sender is TEdit);
+    if ord(Key) = VK_RETURN then
+    begin
 
-  Assert(Sender is TEdit);
-  if ord(Key) = VK_RETURN then
-  begin              //TUser(TEdit(Sender).Tag) // MessageInfo
-    //ChatControl1.Say(TMessageInfo(TUser(TEdit(Sender).Tag)), ctSuperGroup, 'USER'+TEdit(Sender).Tag.ToString+' : ',TEdit(Sender).Text);
-    ChatControl1.SayUser(TUser(TEdit(Sender).Tag), ctSuperGroup, 'USER'+TEdit(Sender).Tag.ToString+' : ',TEdit(Sender).Text);
-    Key := #0;
-    TEdit(Sender).Clear;
-    MessageInfo.Free;
-  end;
+      try
+
+        MyChat := Nil;
+        MyChat := TChat.Create; //instancia uma nova mensagem
+
+        Txt := TEdit(Sender).Text;
+        if Txt.ToLower.Contains('http://') or
+          Txt.ToLower.Contains('www.') and
+          Txt.ToLower.Contains('.com') then
+        Begin
+          MyChat.MediaType := mtLink;
+        End
+        Else
+          MyChat.MediaType := mtTexto;
+
+        MyChat.Hora := FormatDateTime('HH:MM',Time);
+        MyChat.User := TUser(TEdit(Sender).Tag);
+        MyChat.MessageID := Random(128);
+        MyChat.ChatID := 1234;
+        MyChat.Message := TEdit(Sender).Text;
+
+        if TEdit(Sender).Tag = 0 then
+        Begin
+          MyChat.UserName := 'diegolacerdamenezes';
+          MyChat.FirstName := 'Ruan Diego';
+          MyChat.LastName := 'Lacerda Menezes';
+          MyChat.PhoneNumber := '+5521997196000';
+        End
+        Else
+        Begin
+          MyChat.UserName := 'LMCODelivery';
+          MyChat.FirstName := 'ChatBot';
+          MyChat.LastName := 'LMCodee';
+          MyChat.PhoneNumber := '+5521123456780';
+        End;
+
+      finally
+        //Exemplo de uso de enviopassando o object MenssageInfo com os dados da Mensagens
+        ChatControl1.Say(MyChat, ctSuperGroup);
+      end;
+
+      //Exemplo de uso de envio passando o Codigo do Usuario
+  //    ChatControl1.SayUser(TUser(TEdit(Sender).Tag), ctRegularGroup, 'USER'+TEdit(Sender).Tag.ToString+' : ',TEdit(Sender).Text);
+      Key := #0;
+      TEdit(Sender).Clear;
+
+    end;
+  End;
+
 end;
 
 end.

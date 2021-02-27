@@ -46,6 +46,25 @@ object Form4: TForm4
     Caption = 'Panel1'
     ShowCaption = False
     TabOrder = 1
+    object Image1: TImage
+      Left = 584
+      Top = 1
+      Width = 50
+      Height = 39
+      Align = alRight
+      Proportional = True
+      Stretch = True
+    end
+    object Image2: TImage
+      Left = 534
+      Top = 1
+      Width = 50
+      Height = 39
+      Align = alRight
+      Proportional = True
+      Stretch = True
+      ExplicitLeft = 584
+    end
     object LabeledEdit1: TLabeledEdit
       Left = 136
       Top = 11
@@ -78,14 +97,14 @@ object Form4: TForm4
       TabOrder = 2
       OnClick = Button2Click
     end
-    object Button3: TButton
-      Left = 418
+    object btnTest: TButton
+      Left = 411
       Top = 10
-      Width = 75
+      Width = 94
       Height = 25
-      Caption = 'SendImage'
+      Caption = 'Carregar IMG2'
       TabOrder = 3
-      OnClick = Button3Click
+      OnClick = btnTestClick
     end
   end
   object Panel2: TPanel
@@ -105,13 +124,14 @@ object Form4: TForm4
       Top = 6
       Width = 169
       Height = 21
+      Color = 12369084
       TabOrder = 0
       TextHint = 'User1'#39's Input Box'
       OnKeyPress = Edit2KeyPress
     end
     object Edit2: TEdit
       Tag = 1
-      Left = 456
+      Left = 384
       Top = 6
       Width = 169
       Height = 21
@@ -119,6 +139,25 @@ object Form4: TForm4
       TabOrder = 1
       TextHint = 'User2'#39's Input Box'
       OnKeyPress = Edit2KeyPress
+    end
+    object Button4: TButton
+      Left = 183
+      Top = 6
+      Width = 75
+      Height = 21
+      Caption = 'SendImage'
+      TabOrder = 2
+      OnClick = Button3Click
+    end
+    object Button5: TButton
+      Left = 559
+      Top = 6
+      Width = 75
+      Height = 21
+      Anchors = [akTop, akRight]
+      Caption = 'SendImage'
+      TabOrder = 3
+      OnClick = Button5Click
     end
   end
   object OpenDlg: TOpenDialog
